@@ -7,6 +7,9 @@ import sys, argparse
 import numpy as np
 import matplotlib.pyplot as plt 
 import matplotlib.animation as animation
+from prettytable import PrettyTable 
+import datetime
+
 
 inputFile = "input/input.in"
 
@@ -25,35 +28,35 @@ def addGlider(i, j, grid):
                        [0,  255, 255]])
     grid[i:i+3, j:j+3] = glider
 
-def update(frameNum, img, grid, N,):
+def update(frameNum, img, grid,output, height,width):
     # copy grid since we require 8 neighbors for calculation
     # and we go line by line 
     newGrid = grid.copy()
     # TODO: Implement the rules of Conway's Game of Life
-    for i in range(N):
-        for j in range(N):
+    for i in range(height):
+        for j in range(width):
             # compute 8-neighbor sum
-            # using toroidal boundary conditions - x and y wrap around 
-            # so that the simulation takes place on a toroidal surface.
-            total = int((grid[i, (j-1)%N] + grid[i, (j+1)%N] +
-                         grid[(i-1)%N, j] + grid[(i+1)%N, j] +
-                         grid[(i-1)%N, (j-1)%N] + grid[(i-1)%N, (j+1)%N] +
-                         grid[(i+1)%N, (j-1)%N] + grid[(i+1)%N, (j+1)%N])/255)
-            # apply Conway's rules
+            # using toroidal boundary conditions so when the grid ends it continues in the other side
+            # ssimulation in toroidal surface
+            total = int((grid[i, (j-1)%width] + grid[i, (j+1)%width] +
+                         grid[(i-1)%height, j] + grid[(i+1)%height, j] +
+                         grid[(i-1)%height, (j-1)%width] + grid[(i-1)%height, (j+1)%width] +
+                         grid[(i+1)%height, (j-1)%width] + grid[(i+1)%height, (j+1)%width])/255)
+            # Conway's game of life rules
             if grid[i, j]  == ON:
                 if (total < 2) or (total > 3):
                     newGrid[i, j] = OFF
             else:
                 if total == 3:
                     newGrid[i, j] = ON
-    countEntities(grid)                
+    countEntities(grid,output,frameNum)                
     # update data
     img.set_data(newGrid)
     grid[:] = newGrid[:]
     return img,
 
-def countEntities(grid):
-    # Define a dictionary to keep track of entity counts
+def countEntities(grid,output,frameNum):
+    # Make a dictionary that will keep track of the entities counted
     entityCounts = {
         "Block": 0,
         "Beehive": 0,
@@ -67,7 +70,7 @@ def countEntities(grid):
         "Lightweight spaceship": 0
     }
     
-    # Iterate through the grid and count entities
+    # Count entities iterating through the grid with cycles
     for i in range(len(grid)):
         for j in range(len(grid[0])):
             if i < len(grid)-1 and j < len(grid[0])-1:
@@ -89,7 +92,27 @@ def countEntities(grid):
                     elif j < len(grid[0])-3:
                         if grid[i][j] == ON and grid[i][j+1] == ON and grid[i][j+2] == ON and grid[i+1][j-1] == ON and grid[i+1][j+3] == ON and grid[i+2][j-1] == ON and grid[i+2][j+3] == ON and grid[i+3][j] == ON and grid[i+3][j+2] == ON:
                             entityCounts["Toad"] += 1
-    print (entityCounts)        
+
+    #create table
+    table = PrettyTable()
+    table.field_names = ["", "Count", "Percent"]
+    #get total
+    total = 0
+    for item in entityCounts.items():
+        total+=item[1]
+    fakeTotal = max(1,total)
+    #insert data in table
+    for item in entityCounts.items():
+        table.add_row([item[0],item[1],int(item[1]/fakeTotal*100)])
+    table.add_row(["Total",total,100])
+    #insert data in file
+    output.write(f"Iteration: {frameNum+1}\n")
+    output.write(f"{table}\n\n")
+    print(table)
+
+    
+    # x.add_row(["Adelaide", 1295, 1158259, 600.5])
+    # print (entityCounts)        
 # main() function
 def main():
     # Command line args are in sys.argv[1], sys.argv[2] ..
@@ -98,9 +121,6 @@ def main():
     parser = argparse.ArgumentParser(description="Runs Conway's Game of Life system.py.")
     # TODO: add arguments
     
-    # set grid size
-    N = 100
-       
     # set animation update interval
     updateInterval = 50
 
@@ -115,26 +135,25 @@ def main():
     f = open(inputFile, "r")
     lines = f.readlines()
 
-    width, heigth = lines[0].split()
-    width, heigth = int(width), int(heigth)
-    W = width
-    H = heigth
+    width, heigth = map(int,lines[0].split())
+
 
     generations = int(lines[1])
-    grid = np.zeros((W,H))
-    neighbor = np.zeros((W,H))
+    grid = np.zeros((width,heigth))
+    neighbor = np.zeros((width,heigth))
     for line in lines[2:]:
         i, j = line.split()
         i, j = int(i), int(j)
         grid[i, j] = ON
 
+    #open file
+    output = open(r"output.out","w")
+    output.write(f"Simulation at {datetime.date.today()}\n")
+    output.write(f"universe size {width}x{heigth}\n\n")
     # set up animation
     fig, ax = plt.subplots()
     img = ax.imshow(grid, interpolation='nearest')
-    ani = animation.FuncAnimation(fig, update, fargs=(img, grid, N, ),
-                                  frames = 10,
-                                  interval=updateInterval,
-                                  save_count=50)
+    ani = animation.FuncAnimation(fig, update, fargs=(img, grid,output, heigth,width),frames = generations,interval=updateInterval,repeat = False)
 
     plt.show()
 
